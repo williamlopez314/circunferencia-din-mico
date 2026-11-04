@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ángulos en la circunferencia y métricas · PAES M1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script src="https://cdn.tailwindcss.com"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+<style>
+:root{--cy:#22e4ff;--mg:#ff3df2;--li:#a3ff3d;--am:#ffb020}
+body{background:radial-gradient(1200px 600px at 20% -10%,#0f172a,#030712 60%);font-family:Inter,Roboto,sans-serif;color:#e2e8f0;min-height:100vh}
+.card{background:rgba(11,18,36,.85);border:1px solid rgba(34,228,255,.35);border-radius:16px;box-shadow:0 0 22px rgba(34,228,255,.12),inset 0 0 18px rgba(34,228,255,.04)}
+.tab{padding:.5rem .8rem;border-radius:10px;border:1px solid #1e293b;color:#94a3b8;font-weight:600;font-size:.85rem;white-space:nowrap;transition:.15s}
+.tab:hover{color:#fff;border-color:var(--cy)}
+.tab.on{color:#030712;background:var(--cy);border-color:var(--cy);box-shadow:0 0 16px var(--cy)}
+.btn{padding:.5rem 1rem;border-radius:10px;font-weight:700;border:1px solid var(--mg);color:var(--mg);transition:.15s}
+.btn:hover{background:var(--mg);color:#030712;box-shadow:0 0 16px var(--mg)}
+.btn.lime{border-color:var(--li);color:var(--li)}.btn.lime:hover{background:var(--li);box-shadow:0 0 16px var(--li)}
+.opt{display:flex;gap:.7rem;align-items:center;padding:.6rem .8rem;border:1px solid #334155;border-radius:12px;background:#0b1224}
+.opt b{display:grid;place-items:center;width:2rem;height:2rem;border-radius:8px;background:#1e293b;color:var(--cy)}
+.opt.ok{border-color:var(--li);box-shadow:0 0 14px rgba(163,255,61,.5)}.opt.ok b{background:var(--li);color:#030712}
+h1,h2,h3{text-shadow:0 0 14px rgba(34,228,255,.45)}
+canvas{touch-action:none;width:100%;max-width:500px;aspect-ratio:1;cursor:grab;border-radius:14px;background:#050b1a;display:block;margin:auto}
+.thm{border-left:3px solid var(--mg);padding-left:.9rem}
+.katex{font-size:1.08em}
+.blurred{filter:blur(9px);user-select:none;pointer-events:none}
+.tab.b:not(.on){border-color:#6b2166;color:#f0a8ea}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body class="p-3 md:p-6">
+<header class="max-w-7xl mx-auto mb-4">
+  <h1 class="text-2xl md:text-4xl font-extrabold" style="color:var(--cy)">Ángulos en la circunferencia y relaciones métricas</h1>
+  <p class="text-slate-400">3° Medio · Preparación PAES M1 · Arrastra los puntos de la figura y mira cómo cambian las medidas.</p>
+</header>
+<main class="max-w-7xl mx-auto grid lg:grid-cols-2 gap-4">
+  <section class="card p-3 md:p-4">
+    <canvas id="cv" aria-label="Circunferencia interactiva"></canvas>
+    <div id="live" class="mt-3 text-center text-sm md:text-base font-semibold min-h-[3rem]" style="color:var(--li)"></div>
+    <div id="hint" class="mt-1 text-center text-xs text-slate-400"></div>
+    <div id="case" class="justify-center gap-2 mt-2 flex-wrap" style="display:none"><button class="btn lime" onclick="setCase('tan')">Cuerda y tangente</button><button class="btn lime" onclick="setCase('sec')">Cuerda y secante</button></div>
+    <div class="flex justify-center gap-2 mt-2"><button class="btn" onclick="init(mode)">Reiniciar figura</button></div>
+  </section>
+  <section class="card p-3 md:p-4">
+    <nav id="tabs" class="flex flex-wrap gap-2 pb-2 mb-3"></nav>
+    <div id="panel" class="space-y-4"></div>
+  </section>
+</main>
+
+<script>
+/* ---------- KaTeX ---------- */
+function renderMath(el){
+  if(!window.renderMathInElement) return;
+  renderMathInElement(el||document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}],throwOnError:false});
+}
+const arcM=x=>String.raw`\stackrel{\frown}{${x}}`;
+const arc=x=>'$'+arcM(x)+'$';
+
+/* ---------- Geometría ---------- */
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+cv.width=1000; cv.height=1000; ctx.scale(2,2);
+
+let O={x:250,y:250}, R=190, UN=19; 
+const RAD=Math.PI/180, EXT=['m6','m7','m8','m10','m11','m12'];
+const CY='#22e4ff', MG='#ff3df2', LI='#a3ff3d', AM='#ffb020';
+
+const at=d=>({x:O.x+R*Math.cos(d*RAD),y:O.y-R*Math.sin(d*RAD)});
+const ang=p=>Math.atan2(-(p.y-O.y),p.x-O.x)/RAD;
+const mod=(a,n)=>((a%n)+n)%n;
+const dist=(p,q)=>Math.hypot(p.x-q.x,p.y-q.y);
+const unit=(p,q)=>{const d=dist(p,q)||1;return{x:(q.x-p.x)/d,y:(q.y-p.y)/d}};
+const angleAt=(V,p,q)=>{const a=Math.atan2(p.y-V.y,p.x-V.x),b=Math.atan2(q.y-V.y,q.x-V.x);let d=Math.abs(a-b);if(d>Math.PI)d=2*Math.PI-d;return d/RAD};
+
+const f0 = n => Math.round(n);
+const fAng = n => n % 1 === 0 ? n.toString() : n.toFixed(1).replace('.',',');
+const fLen = n => (Math.round(n * 100) / 100).toFixed(2).replace('.',',');
+
+function arcInfo(p,q,others){const ap=ang(p),aq=ang(q);let d=mod(aq-ap,360),s=ap;
+  if(others.some(o=>mod(ang(o)-ap,360)<d)){s=aq;d=360-d}
+  return{s,d,mid:s+d/2}}
+function inter(a,b,c,d){const x1=a.x,y1=a.y,x2=b.x,y2=b.y,x3=c.x,y3=c.y,x4=d.x,y4=d.y;
+  const den=(x1-x2)*(y3-y4)-(y1-y2)*(x3-x4);if(Math.abs(den)<1e-6)return null;
+  const t=((x1-x3)*(y3-y4)-(y1-y3)*(x3-x4))/den;return{x:x1+t*(x2-x1),y:y1+t*(y2-y1)}}
+function chordThrough(P,u){const f={x:P.x-O.x,y:P.y-O.y},b=f.x*u.x+f.y*u.y,c=f.x*f.x+f.y*f.y-R*R,disc=b*b-c;
+  if(disc<400)return null;const s=Math.sqrt(disc);
+  return[{x:P.x+u.x*(-b-s),y:P.y+u.y*(-b-s)},{x:P.x+u.x*(-b+s),y:P.y+u.y*(-b+s)}]}
+
+/* ---------- Dibujo ---------- */
+function rr(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath()}
+function badge(t,x,y,c){ctx.font='700 12px Inter,sans-serif';const w=ctx.measureText(t).width+16,h=22;
+  x=Math.min(Math.max(x,w/2+3),500-w/2-3);y=Math.min(Math.max(y,h/2+3),500-h/2-3);
+  ctx.save();ctx.fillStyle='rgba(3,7,18,.82)';ctx.strokeStyle=c;ctx.lineWidth=1.2;ctx.shadowColor=c;ctx.shadowBlur=10;
+  rr(x-w/2,y-h/2,w,h,8);ctx.fill();ctx.stroke();ctx.shadowBlur=0;ctx.fillStyle=c;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(t,x,y+.5);ctx.restore()}
+function line(p,q,c,w=2,dash){ctx.save();ctx.strokeStyle=c;ctx.lineWidth=w;ctx.shadowColor=c;ctx.shadowBlur=8;ctx.setLineDash(dash||[]);ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(q.x,q.y);ctx.stroke();ctx.restore()}
+function arcHi(i,c){ctx.save();ctx.strokeStyle=c;ctx.lineWidth=6;ctx.shadowColor=c;ctx.shadowBlur=14;ctx.beginPath();ctx.arc(O.x,O.y,R,-i.s*RAD,-(i.s+i.d)*RAD,true);ctx.stroke();ctx.restore()}
+function wedge(V,p,q,c,r=30){const a=Math.atan2(p.y-V.y,p.x-V.x);let d=Math.atan2(q.y-V.y,q.x-V.x)-a;d=((d+3*Math.PI)%(2*Math.PI))-Math.PI;
+  ctx.save();ctx.fillStyle=c+'55';ctx.strokeStyle=c;ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(V.x,V.y);ctx.arc(V.x,V.y,r,a,a+d,d<0);ctx.closePath();ctx.fill();ctx.stroke();ctx.restore()}
+function bis(V,p,q,k){const u=unit(V,p),v=unit(V,q);let b={x:u.x+v.x,y:u.y+v.y},l=Math.hypot(b.x,b.y);if(l<.05){b={x:-u.y,y:u.x};l=1}return{x:V.x+b.x/l*k,y:V.y+b.y/l*k}}
+function dot(p,name,c,ox,oy){ctx.save();ctx.fillStyle=c;ctx.shadowColor=c;ctx.shadowBlur=14;ctx.beginPath();ctx.arc(p.x,p.y,7,0,7);ctx.fill();ctx.restore();
+  let dx=ox,dy=oy;if(dx===undefined){const u=unit(O,p);dx=u.x*18;dy=u.y*18}
+  ctx.fillStyle='#fff';ctx.font='800 15px Inter,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(name,p.x+dx,p.y+dy)}
+const ptOn=(deg,r)=>({x:O.x+r*Math.cos(deg*RAD),y:O.y-r*Math.sin(deg*RAD)});
+const nm=p=>Object.keys(pts).find(k=>pts[k]===p)||'P';
+const live=h=>document.getElementById('live').innerHTML=h;
+const setDynEx=h=>{const el=document.getElementById('dyn-ex'); if(el) el.innerHTML=h;};
+
+/* ---------- Estado ---------- */
+let mode='m0',pts={},drag=null,dirs=null,Pm=null,caso='tan';
+const GEO={m0:'G1',m1:'G1',m2:'G1',m3:'G1',m4:'G1',m5:'G2',m6:'G2',m7:'G3',m8:'G4',m9:'G2',m10:'G2',m11:'G3',m12:'G4'};
+const INSIDE=['m5','m9'];
+const dirU=a=>({x:Math.cos(a*RAD),y:-Math.sin(a*RAD)});
+const tanPts=P=>{const d=dist(P,O),a=ang(P),k=Math.acos(R/d)/RAD;return[at(a+k),at(a-k)]};
+const arcWith=(p,q,t)=>{const ap=ang(p),aq=ang(q);let d=mod(aq-ap,360),s=ap;if(mod(ang(t)-ap,360)>=d){s=aq;d=360-d}return{s,d,mid:s+d/2}};
+const minArc=(p,q)=>{let i=arcInfo(p,q,[]);return i.d>180?arcInfo(q,p,[]):i};
+const mid=(p,q,k,j)=>{const u=unit(p,q);return{x:(p.x+q.x)/2-u.y*k*j,y:(p.y+q.y)/2+u.x*k*j}};
+
+function init(m){mode=m;const g=GEO[m];pts={};Pm=null;
+  if(EXT.includes(m)){ O={x:160,y:250}; R=120; UN=30; }
+  else { O={x:250,y:250}; R=190; UN=19; }
+  
+  const PO = EXT.includes(m) ? {x:440,y:250} : {x:450,y:250};
+  
+  if(m=='m1'){pts.A=at(20);pts.B=at(130)}
+  if(m=='m0'||m=='m2'){pts.A=at(200);pts.B=at(330);pts.C=at(100)}
+  if(m=='m3'){pts.A=at(200);pts.B=at(20);pts.C=at(70)}
+  if(m=='m4'){pts.T=at(270);pts.A=at(150);if(caso=='sec')pts.B=at(30)}
+  if(g=='G2'){
+    if(INSIDE.includes(m)){ pts.A=at(150);pts.B=at(20);pts.C=at(60);pts.D=at(250); }
+    else{
+      pts.P={...PO};
+      const a=chordThrough(pts.P,dirU(164)), b=chordThrough(pts.P,dirU(196));
+      pts.A=a[0]; pts.B=a[1]; pts.C=b[0]; pts.D=b[1];
+    }
+  }
+  if(g=='G3'){pts.P={...PO};pts.X=chordThrough(PO,dirU(192))[1]}
+  if(g=='G4'){pts.P={...PO}}
+  draw()}
+
+function draw(){
+  ctx.clearRect(0,0,500,500);
+  ctx.strokeStyle='rgba(34,228,255,.06)';ctx.lineWidth=1;
+  for(let i=0;i<=500;i+=25){ctx.beginPath();ctx.moveTo(i,0);ctx.lineTo(i,500);ctx.moveTo(0,i);ctx.lineTo(500,i);ctx.stroke()}
+  ctx.save();ctx.strokeStyle=CY;ctx.lineWidth=2.5;ctx.shadowColor=CY;ctx.shadowBlur=16;ctx.beginPath();ctx.arc(O.x,O.y,R,0,7);ctx.stroke();ctx.restore();
+  const g=GEO[mode],{A,B,C}=pts;
+  
+  if(mode=='m1'){
+    const i=minArc(A,B),bp=bis(O,A,B,62);
+    let a_int = f0(i.d);
+    arcHi(i,MG);line(O,A,CY);line(O,B,CY);wedge(O,A,B,MG,34);
+    badge('α = '+a_int+'°',bp.x,bp.y,MG);
+    const m=ptOn(i.mid,R+26);badge('⌒AB = '+a_int+'°',m.x,m.y,AM);
+    dot(O,'O',CY,-14,14);dot(A,'A',LI);dot(B,'B',LI);
+    live('α = ⌒AB = '+a_int+'°');
+    setDynEx(`Si ⌒AB = ${a_int}&deg;, entonces &alpha; = ${a_int}&deg;.`);
+  }
+  if(mode=='m0'||mode=='m2'){
+    const i=arcInfo(A,B,[C]);
+    let a_int = f0(i.d), b_int = a_int/2;
+    arcHi(i,MG);line(C,A,LI);line(C,B,LI);line(O,A,CY,1.5,[5,5]);line(O,B,CY,1.5,[5,5]);wedge(C,A,B,LI,26);
+    const bp=bis(C,A,B,52);badge('β = '+fAng(b_int)+'°',bp.x,bp.y,LI);
+    const op=ptOn(i.mid,60);badge('α = '+a_int+'°',op.x,op.y,MG);
+    const m=ptOn(i.mid,R+26);badge('⌒AB = '+a_int+'°',m.x,m.y,AM);
+    dot(O,'O',CY,-14,14);dot(A,'A',MG);dot(B,'B',MG);dot(C,'C',LI);
+    live('β = '+fAng(b_int)+'° &nbsp;→&nbsp; α = 2β = '+a_int+'°');
+    setDynEx(`Si ⌒AB = ${a_int}&deg;, el inscrito mide &beta; = ${fAng(b_int)}&deg;.`);
+  }
+  if(mode=='m3'){
+    let a_int = f0(angleAt(A,B,C)), b_int = 90 - a_int; 
+    line(A,B,CY,2);line(A,C,LI);line(C,B,LI);
+    const u=unit(C,A),v=unit(C,B),s=15;ctx.save();ctx.strokeStyle=MG;ctx.lineWidth=2;ctx.shadowColor=MG;ctx.shadowBlur=8;ctx.beginPath();
+    ctx.moveTo(C.x+u.x*s,C.y+u.y*s);ctx.lineTo(C.x+(u.x+v.x)*s,C.y+(u.y+v.y)*s);ctx.lineTo(C.x+v.x*s,C.y+v.y*s);ctx.stroke();ctx.restore();
+    const cp=bis(C,A,B,50),ap=bis(A,B,C,52),bp=bis(B,A,C,52);
+    badge('∠C = 90°',cp.x,cp.y,MG);badge(a_int+'°',ap.x,ap.y,AM);badge(b_int+'°',bp.x,bp.y,AM);
+    dot(O,'O',CY,0,14);dot(A,'A',LI);dot(B,'B',LI);dot(C,'C',MG);
+    live('∠ACB = 90° &nbsp;|&nbsp; ∠A + ∠B = 90°');
+    setDynEx(`AB es di&aacute;metro y &ang;CAB = ${b_int}&deg;:<br>&ang;ABC = 180&deg; &minus; 90&deg; &minus; ${b_int}&deg; = ${a_int}&deg;.`);
+  }
+  if(mode=='m4') semi();
+  if(g=='G2') chords();
+  if(g=='G3') tansec();
+  if(g=='G4') twotan();
+}
+
+function semi(){const{T,A,B}=pts;
+  if(caso=='tan'){
+    const u={x:-(T.y-O.y)/R,y:(T.x-O.x)/R},t1={x:T.x+u.x*140,y:T.y+u.y*140},t2={x:T.x-u.x*140,y:T.y-u.y*140};
+    line(t1,t2,MG,2,[7,5]);line(T,A,LI);
+    const a1=angleAt(T,A,t1),a2=angleAt(T,A,t2),sp=a1<a2?t1:t2, i=minArc(A,T);
+    let arc_d = f0(i.d), th = arc_d/2, may = 360 - arc_d;
+    arcHi(i,AM);wedge(T,A,sp,AM,30);
+    const p1=bis(T,A,sp,58),m=ptOn(i.mid,R+26),m2=ptOn(i.mid+180,R+26);
+    badge('θ = '+fAng(th)+'°',p1.x,p1.y,AM);badge('⌒mayor = '+may+'°',m2.x,m2.y,CY);badge('⌒TA = '+arc_d+'°',m.x,m.y,MG);
+    dot(O,'O',CY,-14,14);dot(T,'T',MG);dot(A,'A',LI);
+    live('Cuerda y tangente: θ = ⌒TA / 2 = '+arc_d+'° / 2 = '+fAng(th)+'°<br><span class="text-slate-400 font-normal">Arco mayor = 360° − '+arc_d+'° = '+may+'° → el ángulo del otro lado mide '+fAng(may/2)+'°</span>');
+    setDynEx(`Tangente y cuerda encierran arco ⌒TA = ${arc_d}&deg;:<br>&theta; = ${arc_d} / 2 = ${fAng(th)}&deg;.`);
+  }else{
+    const ub=unit(T,B),E={x:T.x-ub.x*140,y:T.y-ub.y*140};
+    line(T,A,LI);line(T,B,LI);line(T,E,MG,2,[7,5]);
+    const i=arcWith(A,B,T),p=bis(T,A,E,58),m=ptOn(i.mid,R+26);
+    let arc_d = f0(i.d), th = arc_d/2;
+    arcHi(i,MG);wedge(T,A,E,AM,30);
+    badge('θ = '+fAng(th)+'°',p.x,p.y,AM);badge('⌒AB (con T) = '+arc_d+'°',m.x,m.y,MG);
+    dot(O,'O',CY,-14,14);dot(T,'T',MG);dot(A,'A',LI);dot(B,'B',LI);
+    live('Cuerda y secante: θ = ½ · ⌒AB(con T) = '+arc_d+'° / 2 = '+fAng(th)+'°<br><span class="text-slate-400 font-normal">y también θ = 180° − ∠ATB = '+fAng(180-th)+'°</span>');
+    setDynEx(`Cuerda y secante con arco ⌒AB = ${arc_d}&deg;:<br>&theta; = ${arc_d} / 2 = ${fAng(th)}&deg;.<br><span class="text-slate-400">(Y además &ang;ATB = ${fAng(180-th)}&deg;)</span>`);
+  }
+}
+
+function chords(){const{A,B,C,D}=pts,P=inter(A,B,C,D);
+  if(!P){Pm=null;[A,B,C,D].forEach((p,i)=>dot(p,'ABCD'[i],LI));live('Las rectas son paralelas: mueve un punto.');return}
+  Pm=P;const inside=dist(P,O)<R-1,angM=mode=='m5'||mode=='m6';let html='';
+  if(inside)[[A,B],[C,D]].forEach(([p,q])=>line(p,q,CY,2));
+  else{
+    const sec1 = [A,B].sort((p,q)=>dist(P,p)-dist(P,q));
+    const sec2 = [C,D].sort((p,q)=>dist(P,p)-dist(P,q));
+    pts.A = sec1[0]; pts.B = sec1[1];
+    pts.C = sec2[0]; pts.D = sec2[1];
+    line(P,pts.B,CY,2); line(P,pts.D,CY,2);
+  }
+  
+  if(angM&&inside){
+    const i1=arcInfo(A,C,[B,D]),i2=arcInfo(B,D,[A,C]), b1=ptOn(i1.mid,R+26),b2=ptOn(i2.mid,R+26),bp=bis(P,A,C,46);
+    let a1 = f0(i1.d), a2 = f0(i2.d), calc = (a1+a2)/2;
+    arcHi(i1,MG);arcHi(i2,MG);wedge(P,A,C,AM,26);
+    badge('⌒AC = '+a1+'°',b1.x,b1.y,MG);badge('⌒BD = '+a2+'°',b2.x,b2.y,MG);badge('∠APC = '+fAng(calc)+'°',bp.x,bp.y,AM);
+    html='(⌒AC + ⌒BD)/2 = ('+a1+' + '+a2+')/2 = <b>'+fAng(calc)+'°</b> &nbsp;|&nbsp; medido: '+fAng(calc)+'°';
+    setDynEx(`Con ⌒AC = ${a1}&deg; y ⌒BD = ${a2}&deg;:<br>&ang;APC = (${a1} + ${a2}) / 2 = ${fAng(calc)}&deg;.`);
+  }
+  if(angM&&!inside){
+    const n=[A,B].sort((p,q)=>dist(P,p)-dist(P,q)),k=[C,D].sort((p,q)=>dist(P,p)-dist(P,q));
+    const near=arcInfo(n[0],k[0],[n[1],k[1]]),far=arcInfo(n[1],k[1],[n[0],k[0]]);
+    let aF = f0(far.d), aN = f0(near.d), calc = (aF-aN)/2;
+    arcHi(near,AM);arcHi(far,MG);wedge(P,n[0],k[0],AM,26);
+    const b1=ptOn(near.mid,R+28),b2=ptOn(far.mid,R+28),bp=bis(P,n[0],k[0],mode=='m6'?75:50);
+    badge('⌒'+nm(n[0])+nm(k[0])+' = '+aN+'°',b1.x,b1.y,AM);badge('⌒'+nm(n[1])+nm(k[1])+' = '+aF+'°',b2.x,b2.y,MG);badge('∠P = '+fAng(calc)+'°',bp.x,bp.y,LI);
+    html='(arco mayor − arco menor)/2 = ('+aF+' − '+aN+')/2 = <b>'+fAng(calc)+'°</b> &nbsp;|&nbsp; medido: '+fAng(calc)+'°';
+    setDynEx(`Arco mayor ${aF}&deg; y menor ${aN}&deg;:<br>&ang;P = (${aF} &minus; ${aN}) / 2 = ${fAng(calc)}&deg;.`);
+  }
+  if(!angM){
+    if(inside){
+      let pa = Math.round(dist(P,A)/UN), pb = Math.round(dist(P,B)/UN);
+      let pc = Math.round(dist(P,C)/UN), pd = Math.round(dist(P,D)/UN);
+      if(pa<=0) pa=1; if(pb<=0) pb=1; if(pc<=0) pc=1; 
+      pd = Math.round((pa * pb) / pc); if(pd<=0) pd=1;
+      let prod = pa * pb;
+      const L={PA:A,PB:B,PC:C,PD:D};
+      const vals={PA:pa, PB:pb, PC:pc, PD:pd};
+      Object.keys(L).forEach((k,j)=>{const q=mid(P,L[k],20,j%2?1:-1);badge(k+' = '+vals[k],q.x,q.y,j<2?LI:AM)});
+      html='PA·PB = '+pa+'·'+pb+' = '+prod+' &nbsp;|&nbsp; PC·PD = '+pc+'·'+pd+' = '+prod;
+      setDynEx(`Segmentos interiores:<br>${pa} &middot; ${pb} = ${pc} &middot; ${pd} = ${prod}`);
+    } else {
+      // Longitudes geométricas reales: no se fuerzan valores enteros que
+      // puedan romper la igualdad del teorema de las secantes.
+      const pa = dist(P,A) / UN;
+      const pb = dist(P,B) / UN;
+      const pc = dist(P,C) / UN;
+      const pd = dist(P,D) / UN;
+      const prod1 = pa * pb;
+      const prod2 = pc * pd;
+
+      const spa=fLen(pa), spb=fLen(pb), spc=fLen(pc), spd=fLen(pd);
+      const sprod1=fLen(prod1), sprod2=fLen(prod2);
+
+      badge('PA = '+spa, mid(P,A,18,1).x, mid(P,A,18,1).y, LI);
+      badge('PB = '+spb, mid(P,B,20,-1).x, mid(P,B,20,-1).y, AM);
+      badge('PC = '+spc, mid(P,C,18,-1).x, mid(P,C,18,-1).y, LI);
+      badge('PD = '+spd, mid(P,D,20,1).x, mid(P,D,20,1).y, AM);
+
+      html=`PA·PB = ${spa}·${spb} ≈ ${sprod1} &nbsp;|&nbsp; PC·PD = ${spc}·${spd} ≈ ${sprod2}`;
+      setDynEx(`Teorema de las secantes:<br>PA &middot; PB = ${spa} &middot; ${spb} &asymp; ${sprod1}<br>PC &middot; PD = ${spc} &middot; ${spd} &asymp; ${sprod2}`);
+    }
+  }
+  dot(A,'A',LI);dot(B,'B',LI);dot(C,'C',AM);dot(D,'D',AM);dot(P,'P',MG,13,-13);live(html)}
+
+function tansec(){const P=pts.P,X=pts.X;Pm=P;
+  const T=tanPts(P).sort((a,b)=>dist(a,X)-dist(b,X))[0],r=chordThrough(P,unit(P,X));if(!r)return;
+  
+  // Ordenamiento riguroso: A es el punto cercano, B es el punto lejano (secante completa PB > PA)
+  const sortedR = r.sort((p,q)=>dist(P,p)-dist(P,q));
+  const na=sortedR[0], fa=sortedR[1];
+  pts.A = na; pts.B = fa;
+  let html;
+  
+  line(P,fa,CY,2);line(P,T,LI,2);line(O,T,CY,1.5,[5,5]);
+  if(mode=='m7'){
+    const near=arcInfo(T,na,[fa]),far=arcInfo(T,fa,[na]),bp=bis(P,T,na,65);
+    let aF = f0(far.d), aN = f0(near.d), calc = (aF-aN)/2;
+    arcHi(near,AM);arcHi(far,MG);wedge(P,T,na,LI,28);
+    badge('⌒TA = '+aN+'°',ptOn(near.mid,R+26).x,ptOn(near.mid,R+26).y,AM);
+    badge('⌒TB = '+aF+'°',ptOn(far.mid,R+26).x,ptOn(far.mid,R+26).y,MG);
+    badge('∠P = '+fAng(calc)+'°',bp.x,bp.y,LI);
+    html='(⌒TB − ⌒TA)/2 = ('+aF+' − '+aN+')/2 = <b>'+fAng(calc)+'°</b> &nbsp;|&nbsp; medido: '+fAng(calc)+'°';
+    setDynEx(`Con ⌒TB = ${aF}&deg; y ⌒TA = ${aN}&deg;:<br>&ang;P = (${aF} &minus; ${aN}) / 2 = ${fAng(calc)}&deg;.`);
+  }else{
+    // Longitudes geométricas reales: PT² = PA · PB por construcción.
+    const pt = dist(P,T) / UN;
+    const pa = dist(P,na) / UN;
+    const pb = dist(P,fa) / UN;
+    const pt2 = pt * pt;
+    const prod = pa * pb;
+
+    const spt=fLen(pt), spa=fLen(pa), spb=fLen(pb);
+    const spt2=fLen(pt2), sprod=fLen(prod);
+
+    badge('PT = '+spt, mid(P,T,18,1).x, mid(P,T,18,1).y, LI);
+    badge('PA = '+spa, mid(P,na,18,-1).x, mid(P,na,18,-1).y, AM);
+    badge('PB = '+spb, mid(P,fa,20,1).x, mid(P,fa,20,1).y, MG);
+
+    html=`PT² = ${spt}² ≈ ${spt2} &nbsp;|&nbsp; PA·PB = ${spa}·${spb} ≈ ${sprod}`;
+    setDynEx(`Teorema tangente-secante:<br>PT&sup2; = ${spt}&sup2; &asymp; ${spt2} &nbsp;|&nbsp; PA &middot; PB = ${spa} &middot; ${spb} &asymp; ${sprod}`);
+  }
+  dot(T,'T',LI);dot(na,'A',AM);dot(fa,'B',AM);dot(P,'P',MG,13,-13);dot(O,'O',CY,-14,14);live(html)}
+
+function twotan(){const P=pts.P;Pm=P;const[T1,T2]=tanPts(P);let html;
+  line(P,T1,LI,2);line(P,T2,LI,2);line(O,T1,CY,1.5,[5,5]);line(O,T2,CY,1.5,[5,5]);
+  if(mode=='m8'){
+    const mi=minArc(T1,T2), bp=bis(P,T1,T2,65);
+    let aN = f0(mi.d), aF = 360-aN, calc = (aF-aN)/2;
+    arcHi(mi,AM);wedge(P,T1,T2,LI,28);
+    badge('menor = '+aN+'°',ptOn(mi.mid,R+26).x,ptOn(mi.mid,R+26).y,AM);
+    badge('mayor = '+aF+'°',ptOn(mi.mid+180,R+26).x,ptOn(mi.mid+180,R+26).y,MG);
+    badge('∠P = '+fAng(calc)+'°',bp.x,bp.y,LI);
+    html='(mayor − menor)/2 = ('+aF+' − '+aN+')/2 = <b>'+fAng(calc)+'°</b> &nbsp;|&nbsp; medido: '+fAng(calc)+'°';
+    setDynEx(`Arco menor ${aN}&deg;, mayor ${aF}&deg;:<br>&ang;P = (${aF} &minus; ${aN}) / 2 = ${fAng(calc)}&deg;.`);
+  }else{
+    let a = Math.round(dist(P,T1)/UN); if(a<=0) a=5;
+    badge('PT₁ = '+a,mid(P,T1,18,1).x,mid(P,T1,18,1).y,LI);
+    badge('PT₂ = '+a,mid(P,T2,18,-1).x,mid(P,T2,18,-1).y,LI);
+    html='PT₁ = '+a+' &nbsp;=&nbsp; PT₂ = '+a;
+    setDynEx(`Segmentos tangentes iguales desde un punto exterior:<br>PT&#8321; = PT&#8322; = ${a}`);
+  }
+  dot(T1,'T₁',LI);dot(T2,'T₂',LI);dot(P,'P',MG,13,-13);dot(O,'O',CY,-14,14);live(html)}
+
+/* ---------- Interacción ---------- */
+function pos(e){const t=e.touches&&e.touches[0]?e.touches[0]:e,r=cv.getBoundingClientRect();return{x:(t.clientX-r.left)*500/r.width,y:(t.clientY-r.top)*500/r.height}}
+function down(e){const m=pos(e);let best=null,bd=(e.touches?30:22);
+  const cand=Object.entries(pts).filter(([k])=>k!='P');if(Pm&&GEO[mode]!='G1')cand.push(['P',Pm]);
+  cand.forEach(([k,p])=>{const d=dist(m,p);if(d<bd){bd=d;best=k}});
+  drag=best;if(best){e.preventDefault();cv.style.cursor='grabbing';
+    if(best=='P'&&GEO[mode]=='G2')dirs=[unit(pts.A,pts.B),unit(pts.C,pts.D)]}}
+function move(e){if(!drag)return;e.preventDefault();const m=pos(e),g=GEO[mode];
+  if(drag=='P'){
+    let np={x:Math.min(Math.max(m.x,12),488),y:Math.min(Math.max(m.y,12),488)};
+    const d=dist(np,O)||1,lim=INSIDE.includes(mode)?[0,R-16]:[R+16,999],dd=Math.min(Math.max(d,lim[0]),lim[1]);
+    if(dd!==d)np={x:O.x+(np.x-O.x)/d*dd,y:O.y+(np.y-O.y)/d*dd};
+    if(g=='G2'){
+      const a=chordThrough(np,dirs[0]),b=chordThrough(np,dirs[1]);if(!a||!b)return;
+      const asg=(r,p,q)=>dist(r[0],p)+dist(r[1],q)<=dist(r[1],p)+dist(r[0],q)?[r[0],r[1]]:[r[1],r[0]];
+      [pts.A,pts.B]=asg(a,pts.A,pts.B);[pts.C,pts.D]=asg(b,pts.C,pts.D)
+    }else pts.P=np;
+  }else if(g=='G3'){const t=at(ang(m));if(chordThrough(pts.P,unit(pts.P,t)))pts.X=t}
+  else{
+    let a=Math.round(ang(m)/2)*2; pts[drag]=at(a);
+    if(mode=='m3'&&drag=='A')pts.B=at(a+180);
+    if(mode=='m3'&&drag=='B')pts.A=at(a+180)}
+  draw()}
+function up(){drag=null;cv.style.cursor='grab'}
+cv.addEventListener('mousedown',down);window.addEventListener('mousemove',move);window.addEventListener('mouseup',up);
+cv.addEventListener('touchstart',down,{passive:false});cv.addEventListener('touchmove',move,{passive:false});window.addEventListener('touchend',up);
+
+/* ---------- Contenido ---------- */
+const arcEq=(x,v)=>'$'+arcM(x)+'='+v+'^\\circ$';
+const Q=(q,opts,ans,sol)=>({q,opts,ans,sol});
+
+const mods=[
+{name:'Inicio y guía'},
+{name:'Ángulo del centro',hint:'Arrastra A y B por la circunferencia.',
+ theorem:String.raw`Un <b>ángulo del centro</b> tiene su vértice en $O$ y sus lados son radios. Mide lo mismo que el arco que subtiende:$$\alpha=\angle AOB=${arcM('AB')}$$ La circunferencia completa mide $360^\circ$.`,
+ ch:[Q(String.raw`El ángulo $\angle AOB$ mide $(3x+20)^\circ$ y subtiende un arco ${arc('AB')} de $110^\circ$. ¿Cuál es el valor de $x$?`,['20','30','35','90'],1,String.raw`<b>1.</b> Ángulo del centro = arco: $3x+20=110$.<br><b>2.</b> $3x=90\Rightarrow x=30$. Alternativa <b>B</b>.`),
+  Q(String.raw`Los puntos $A$, $B$ y $C$ dividen la circunferencia en arcos ${arc('AB')}, ${arc('BC')} y ${arc('CA')} en razón $2:3:4$. ¿Cuánto mide $\angle AOB$?`,['40°','80°','120°','160°'],1,String.raw`<b>1.</b> $2k+3k+4k=360^\circ\Rightarrow k=40^\circ$.<br><b>2.</b> ${arc('AB')} $=2k=80^\circ$, y el ángulo del centro mide lo mismo. Alternativa <b>B</b>.`)]},
+{name:'Ángulo inscrito',hint:'Arrastra A, B y C. ¿Qué pasa con β cuando C cruza al otro arco?',
+ theorem:String.raw`Un <b>ángulo inscrito</b> tiene su vértice en la circunferencia y sus lados son cuerdas. Mide la mitad del arco que subtiende:$$\beta=\tfrac12\,\alpha=\tfrac12\,${arcM('AB')}$$`,
+ ch:[Q(String.raw`El ángulo del centro $\angle AOB$ mide $4x$ y el inscrito $\angle ACB$, que subtiende el mismo arco, mide $(x+30)^\circ$. ¿Cuál es el valor de $x$?`,['15','20','30','60'],2,String.raw`<b>1.</b> Central = doble del inscrito: $4x=2(x+30)$.<br><b>2.</b> $2x=60\Rightarrow x=30$. Alternativa <b>C</b>.`),
+  Q(String.raw`El ángulo inscrito $\angle ACB$ mide $(x+15)^\circ$ y el arco ${arc('AB')} que subtiende mide $(3x-10)^\circ$. ¿Cuánto mide el arco ${arc('AB')}?`,['55°','95°','110°','125°'],2,String.raw`<b>1.</b> Arco = doble del inscrito: $3x-10=2(x+15)$.<br><b>2.</b> $x=40$.<br><b>3.</b> Arco $=3\cdot40-10=110^\circ$. Alternativa <b>C</b>.`)]},
+{name:'Inscrito en semicircunferencia',hint:'Arrastra A (B queda opuesto) y C.',
+ theorem:String.raw`Si un lado del ángulo inscrito es un diámetro, subtiende una semicircunferencia ($180^\circ$):$$\angle ACB=\tfrac12\cdot180^\circ=90^\circ$$ Es el teorema de Tales en la circunferencia; los otros dos ángulos del triángulo suman $90^\circ$.`,
+ ch:[Q(String.raw`$AB$ es diámetro y $C$ está en la circunferencia. Si $\angle CAB=28^\circ$, ¿cuánto mide $\angle ABC$?`,['28°','62°','90°','152°'],1,String.raw`<b>1.</b> $\angle ACB=90^\circ$.<br><b>2.</b> $28^\circ+90^\circ+\angle ABC=180^\circ\Rightarrow\angle ABC=62^\circ$. Alternativa <b>B</b>.`),
+  Q(String.raw`$AB$ es diámetro, $\angle CAB=(x+4)^\circ$ y $\angle ABC=(2x-10)^\circ$. ¿Cuánto mide $\angle CAB$?`,['32°','36°','54°','90°'],1,String.raw`<b>1.</b> En el triángulo rectángulo: $(x+4)+(2x-10)=90$.<br><b>2.</b> $3x=96\Rightarrow x=32$.<br><b>3.</b> $\angle CAB=36^\circ$. Alternativa <b>B</b>.`)]},
+{name:'Ángulo semi inscrito',hint:'Arrastra T y A (y B en el caso de la secante). Cambia de caso con los botones.',
+ theorem:String.raw`Un <b>ángulo semi inscrito</b> tiene su vértice en la circunferencia y lo forman una <b>cuerda y una tangente</b> o una <b>cuerda y la prolongación de otra cuerda</b> (secante). Mide la mitad del arco que encierra:$$\theta=\tfrac12\,${arcM('TA')}$$ Con cuerda y secante, $\theta=\tfrac12\cdot$(arco $AB$ que contiene a $T$), es decir $\theta=180^\circ-\angle ATB$.`,
+ ch:[Q(String.raw`El ángulo entre una tangente y una cuerda encierra un arco de $130^\circ$. ¿Cuánto mide el ángulo?`,['130°','115°','65°','50°'],2,String.raw`<b>1.</b> Semi inscrito = mitad del arco.<br><b>2.</b> $130^\circ\div2=65^\circ$. Alternativa <b>C</b>.`),
+  Q(String.raw`El ángulo inscrito $\angle ATB$ mide $55^\circ$. ¿Cuánto mide el ángulo formado por la cuerda $TA$ y la prolongación de $BT$?`,['55°','110°','125°','305°'],2,String.raw`<b>1.</b> Ambos ángulos son suplementarios en $T$.<br><b>2.</b> $\theta=180^\circ-55^\circ=125^\circ$ (equivale a la mitad del arco de $250^\circ$). Alternativa <b>C</b>.`)]},
+{name:'Ángulo interior',hint:'Arrastra A, B, C, D y también P dentro del círculo.',
+ theorem:String.raw`Si dos cuerdas se cortan en $P$ (dentro del círculo), el ángulo mide la <b>semisuma</b> de los arcos que abarcan él y su opuesto por el vértice:$$\angle APC=\dfrac{${arcM('AC')}+${arcM('BD')}}{2}$$`,
+ ch:[Q(String.raw`Dos cuerdas se cortan en $P$. Si ${arc('AC')} $=64^\circ$ y ${arc('BD')} $=36^\circ$, ¿cuánto mide $\angle APC$?`,['28°','50°','64°','100°'],1,String.raw`<b>1.</b> Semisuma: $\dfrac{64+36}{2}$.<br><b>2.</b> $=50^\circ$. Alternativa <b>B</b>.`),
+  Q(String.raw`$\angle APC=75^\circ$, ${arc('AC')} $=(2x+10)^\circ$ y ${arc('BD')} $=(3x+20)^\circ$. ¿Cuál es el valor de $x$?`,['12','24','30','36'],1,String.raw`<b>1.</b> $\dfrac{(2x+10)+(3x+20)}{2}=75$.<br><b>2.</b> $5x+30=150\Rightarrow x=24$. Alternativa <b>B</b>.`)]},
+{name:'Exterior: dos secantes',hint:'Arrastra P y los puntos de las secantes; P siempre queda fuera.',
+ theorem:String.raw`Si dos secantes parten de $P$ (fuera del círculo), el ángulo mide la <b>semidiferencia</b> de los arcos:$$\angle P=\dfrac{\text{arco mayor}-\text{arco menor}}{2}$$ El arco mayor es el lejano a $P$ y el menor el cercano.`,
+ ch:[Q(String.raw`Dos secantes desde $P$ determinan un arco mayor de $110^\circ$ y uno menor de $30^\circ$. ¿Cuánto mide el ángulo en $P$?`,['20°','40°','70°','80°'],1,String.raw`<b>1.</b> $\dfrac{110-30}{2}=40^\circ$. Alternativa <b>B</b>.<br><i>Trampas:</i> 70° es la semisuma y 80° olvida dividir por 2.`),
+  Q(String.raw`Desde $P$ salen dos secantes y $\angle P=25^\circ$. Si el arco menor mide $40^\circ$, ¿cuánto mide el arco mayor?`,['50°','65°','90°','115°'],2,String.raw`<b>1.</b> $\dfrac{M-40}{2}=25$.<br><b>2.</b> $M-40=50\Rightarrow M=90^\circ$. Alternativa <b>C</b>.`)]},
+{name:'Exterior: secante-tangente',hint:'Arrastra P y el punto B de la secante.',
+ theorem:String.raw`Si desde $P$ salen una tangente ($T$) y una secante ($A$, $B$), el ángulo mide la semidiferencia de los arcos:$$\angle P=\dfrac{${arcM('TB')}-${arcM('TA')}}{2}$$ ${arc('TB')} es el arco lejano y ${arc('TA')} el cercano.`,
+ ch:[Q(String.raw`Una tangente y una secante parten de $P$. El arco lejano mide $150^\circ$ y el cercano $50^\circ$. ¿Cuánto mide $\angle P$?`,['25°','50°','100°','200°'],1,String.raw`<b>1.</b> $\dfrac{150-50}{2}=50^\circ$. Alternativa <b>B</b>.`),
+  Q(String.raw`$\angle P=30^\circ$, ${arc('TB')} $=(3x+30)^\circ$ y ${arc('TA')} $=(x+10)^\circ$. ¿Cuál es el valor de $x$?`,['10','20','30','40'],1,String.raw`<b>1.</b> $\dfrac{(3x+30)-(x+10)}{2}=30$.<br><b>2.</b> $2x+20=60\Rightarrow x=20$. Alternativa <b>B</b>.`)]},
+{name:'Exterior: dos tangentes',hint:'Arrastra P: las tangentes se ajustan solas.',
+ theorem:String.raw`Con dos tangentes desde $P$ el ángulo mide la semidiferencia entre el arco mayor y el menor. Como ambos suman $360^\circ$:$$\angle P=\dfrac{\text{mayor}-\text{menor}}{2}=180^\circ-\text{arco menor}$$ Además $\angle P+\angle T_1OT_2=180^\circ$.`,
+ ch:[Q(String.raw`Dos tangentes desde $P$ determinan un arco menor de $100^\circ$. ¿Cuánto mide $\angle P$?`,['40°','80°','100°','160°'],1,String.raw`<b>1.</b> Arco mayor $=360^\circ-100^\circ=260^\circ$.<br><b>2.</b> $\dfrac{260-100}{2}=80^\circ$. Alternativa <b>B</b>.`),
+  Q(String.raw`Dos tangentes desde $P$ forman un ángulo de $40^\circ$. ¿Cuánto mide el arco mayor entre los puntos de tangencia?`,['140°','180°','220°','320°'],2,String.raw`<b>1.</b> Arco menor $=180^\circ-40^\circ=140^\circ$.<br><b>2.</b> Arco mayor $=360^\circ-140^\circ=220^\circ$. Alternativa <b>C</b>.`)]},
+{name:'Segmentos entre dos cuerdas',hint:'Arrastra P y los extremos de las cuerdas.',
+ theorem:String.raw`Si dos cuerdas $AB$ y $CD$ se cortan en $P$, el producto de los segmentos de una cuerda es igual al de la otra:$$PA\cdot PB=PC\cdot PD$$`,
+ ch:[Q(String.raw`Dos cuerdas se cortan en $P$. Si $PA=4$, $PB=9$ y $PC=3$, ¿cuánto mide $PD$?`,['6','8','12','16'],2,String.raw`<b>1.</b> $4\cdot9=3\cdot PD$.<br><b>2.</b> $PD=12$. Alternativa <b>C</b>.`),
+  Q(String.raw`En la cuerda $AB$, $PA=x$ y $PB=x+5$. En la cuerda $CD$, $PC=4$ y $PD=9$. ¿Cuánto mide $x$?`,['3','4','5','9'],1,String.raw`<b>1.</b> $x(x+5)=4\cdot9=36$.<br><b>2.</b> $x^2+5x-36=0\Rightarrow(x+9)(x-4)=0$.<br><b>3.</b> $x=4$ (la longitud es positiva). Alternativa <b>B</b>.`)]},
+{name:'Segmentos por secantes',hint:'Arrastra P (fuera) y los puntos de las secantes.',
+ theorem:String.raw`Si dos secantes parten de $P$ (fuera), el producto de la parte externa por la secante completa es igual en ambas:$$PA\cdot PB=PC\cdot PD$$ con $A$ y $C$ los puntos cercanos a $P$.`,
+ ch:[Q(String.raw`Desde $P$: primera secante con $PA=3$ y $AB=5$; segunda con $PC=4$. ¿Cuánto mide $PD$ (secante completa)?`,['4','6','8','9'],1,String.raw`<b>1.</b> $PB=3+5=8$.<br><b>2.</b> $3\cdot8=4\cdot PD\Rightarrow PD=6$. Alternativa <b>B</b>.`),
+  Q(String.raw`$PA=x$, $AB=5$, $PC=2$ y $PD=12$. ¿Cuánto mide $x$?`,['2','3','4','6'],1,String.raw`<b>1.</b> $PB=x+5$: $x(x+5)=2\cdot12=24$.<br><b>2.</b> $x^2+5x-24=0\Rightarrow(x+8)(x-3)=0$.<br><b>3.</b> $x=3$. Alternativa <b>B</b>.`)]},
+{name:'Segmentos tangente-secante',hint:'Arrastra P y el punto de la secante.',
+ theorem:String.raw`Si desde $P$ salen una tangente $PT$ y una secante $PAB$, la tangente es media proporcional:$$PT^2=PA\cdot PB$$`,
+ ch:[Q(String.raw`$PT=6$ es tangente y $PA=4$ es la parte externa de la secante. ¿Cuánto mide $PB$?`,['6','9','10','5'],1,String.raw`<b>1.</b> $PT^2=PA\cdot PB\Rightarrow36=4\cdot PB$.<br><b>2.</b> $PB=9$. Alternativa <b>B</b>.`),
+  Q(String.raw`$PT=x$, $PA=x-2$ y $PB=x+3$. ¿Cuánto mide $PT$?`,['3','4','6','9'],2,String.raw`<b>1.</b> $x^2=(x-2)(x+3)=x^2+x-6$.<br><b>2.</b> $x=6$. Alternativa <b>C</b>.`)]},
+{name:'Segmentos entre tangentes',hint:'Arrastra P; compara PT₁ y PT₂.',
+ theorem:String.raw`Los dos segmentos tangentes desde un mismo punto exterior son iguales:$$PT_1=PT_2$$ Como $OT\perp PT$, también $PT^2=PO^2-r^2$.`,
+ ch:[Q(String.raw`$PT_1=(3x-4)$ y $PT_2=(x+8)$ son tangentes desde $P$. ¿Cuánto mide $PT_1$?`,['6','12','14','18'],2,String.raw`<b>1.</b> $3x-4=x+8\Rightarrow x=6$.<br><b>2.</b> $PT_1=3\cdot6-4=14$. Alternativa <b>C</b>.`),
+  Q(String.raw`Desde $P$ con $PO=13$ y radio $5$ se trazan las tangentes $PT_1$ y $PT_2$. ¿Cuál es el perímetro del cuadrilátero $PT_1OT_2$?`,['24','30','34','36'],2,String.raw`<b>1.</b> $PT=\sqrt{13^2-5^2}=12$.<br><b>2.</b> Perímetro $=12+12+5+5=34$. Alternativa <b>C</b>.`)]}
+];
+const SECS=[45,60],LVL=['Nivel 1 · básico · 45 s','Nivel 2 · avanzado · 1 min'],timers=[null,null];
+let cur=0;
+const tabs=document.getElementById('tabs'),panel=document.getElementById('panel');
+function addTab(i){const b=document.createElement('button');b.className='tab';b.dataset.i=i;b.textContent=i?i+'. '+mods[i].name:'📌 '+mods[i].name;b.onclick=()=>show(i);tabs.appendChild(b)}
+function addLbl(t){const s=document.createElement('span');s.className='w-full text-xs text-slate-400 mt-1';s.textContent=t;tabs.appendChild(s)}
+addTab(0);addLbl('A. Ángulos');for(let i=1;i<=8;i++)addTab(i);addLbl('B. Relaciones métricas');for(let i=9;i<=12;i++)addTab(i);
+
+function home(){
+  const steps=[['Formen 10 grupos de 4','Cada grupo recibe cuatro tarjetas físicas: A, B, C y D. Roles sugeridos: lector, operador de la figura, calculista y portavoz.'],
+   ['Exploren la figura (3 min)','El operador arrastra los puntos y el grupo anota qué medidas cambian y cuáles se mantienen.'],
+   ['Lean el teorema y el ejemplo','Comparen lo que observaron con el enunciado del tema.'],
+   ['Desafío de nivel 1 (45 s)','El ejercicio está difuminado. Al presionar “Iniciar”, se muestra y corre el tiempo. Discuten en voz baja.'],
+   ['Voten a la vez','Al terminar el tiempo, todos los portavoces levantan su tarjeta al mismo tiempo.'],
+   ['Desafío de nivel 2 (1 min)','Misma dinámica con un ejercicio más difícil. Luego se revela la solución paso a paso y se anota un punto por grupo acertado.']];
+  return `<h2 class="text-xl font-extrabold" style="color:var(--mg)">Cómo trabajar en clase</h2>
+  <ol class="space-y-2">${steps.map((s,i)=>`<li class="opt"><b>${i+1}</b><div><div class="font-bold text-white">${s[0]}</div><div class="text-sm text-slate-400">${s[1]}</div></div></li>`).join('')}</ol>
+  <div><h3 class="font-bold mb-2" style="color:var(--am)">Puntaje de grupos</h3><div id="score" class="grid grid-cols-5 gap-2"></div></div>
+  <p class="text-sm text-slate-400">La figura de la izquierda es un ángulo inscrito: arrastra $A$, $B$ o $C$ para probar. Luego elige un tema.</p>`}
+const scores=Array(10).fill(0);
+function scoreInit(){const s=document.getElementById('score');if(!s)return;
+  s.innerHTML=scores.map((v,i)=>`<div class="opt flex-col !gap-1 !p-2 text-center"><span class="text-xs text-slate-400">Grupo ${i+1}</span><span class="font-extrabold text-xl" id="sc${i}" style="color:var(--li)">${v}</span><span class="flex gap-1"><button class="btn !p-0 w-7" onclick="sc(${i},-1)">−</button><button class="btn lime !p-0 w-7" onclick="sc(${i},1)">+</button></span></div>`).join('')}
+function sc(i,d){scores[i]=Math.max(0,scores[i]+d);document.getElementById('sc'+i).textContent=scores[i]}
+
+function chal(c,k){return `<div class="card p-3" style="border-color:rgba(255,61,242,.45)">
+  <h3 class="font-bold mb-2" style="color:var(--am)">Desafío PAES M1 · ${LVL[k]}</h3>
+  <div class="relative"><div id="ex${k}" class="blurred"><p class="mb-3">${c.q}</p>
+  <div class="grid sm:grid-cols-2 gap-2 mb-3">${c.opts.map((o,j)=>`<div class="opt" id="o${k}_${j}"><b>${'ABCD'[j]}</b><span>${o}</span></div>`).join('')}</div></div>
+  <div id="lk${k}" class="absolute inset-0 grid place-items-center text-center font-bold px-4" style="color:var(--cy)">🔒 El ejercicio se muestra al iniciar el contador</div></div>
+  <div class="h-2 rounded bg-slate-800 overflow-hidden mb-1"><div id="bar${k}" class="h-full" style="width:100%;background:var(--am);box-shadow:0 0 10px var(--am)"></div></div>
+  <div id="tm${k}" class="text-center font-extrabold text-2xl mb-2" style="color:var(--am)">${SECS[k]} s</div>
+  <div class="flex flex-wrap gap-2 justify-center"><button class="btn lime" onclick="start(${k})">Iniciar ${SECS[k]} s</button><button class="btn" onclick="reveal(${k})">Revelar solución</button></div>
+  <div id="sol${k}" class="hidden mt-3 p-3 rounded-xl" style="background:#0b1f12;border:1px solid var(--li)"><b style="color:var(--li)">Solución paso a paso</b><div class="mt-1">${c.sol}</div></div></div>`}
+
+function setCase(c){caso=c;init('m4')}
+function show(i){
+  cur=i;timers.forEach(clearInterval);
+  tabs.querySelectorAll('button').forEach(b=>b.classList.toggle('on',+b.dataset.i==i));
+  const m=mods[i];
+  document.getElementById('case').style.display=i==4?'flex':'none';
+  document.getElementById('hint').textContent=m.hint||'';
+  if(i==0){panel.innerHTML=home();scoreInit();renderMath();return}
+  panel.innerHTML=`
+  <div class="thm"><h2 class="text-xl font-extrabold mb-2" style="color:var(--mg)">${i}. ${m.name}</h2><div>${m.theorem}</div></div>
+  <div class="card p-3"><h3 class="font-bold mb-1" style="color:var(--li)">Ejercicio resuelto</h3><div id="dyn-ex" class="text-white mt-1 text-sm md:text-base leading-relaxed tracking-wide"></div></div>
+  ${chal(m.ch[0],0)}${chal(m.ch[1],1)}`;
+  init('m'+i);
+  renderMath();
+}
+function unlock(k){document.getElementById('ex'+k).classList.remove('blurred');document.getElementById('lk'+k).style.display='none'}
+function start(k){clearInterval(timers[k]);unlock(k);let t=SECS[k];const bar=document.getElementById('bar'+k),tm=document.getElementById('tm'+k);
+  const tick=()=>{if(bar)bar.style.width=(t/SECS[k]*100)+'%';if(tm){tm.textContent=t>0?t+' s':'¡Tiempo! Levanten las tarjetas A · B · C · D';tm.style.color=t<=10?'#ff3df2':'#ffb020'}};
+  tick();timers[k]=setInterval(()=>{t--;tick();if(t<=0){clearInterval(timers[k]);beep()}},1000)}
+function beep(){try{const a=new(window.AudioContext||window.webkitAudioContext)(),o=a.createOscillator();o.frequency.value=660;o.connect(a.destination);o.start();setTimeout(()=>o.stop(),400)}catch(e){}}
+function reveal(k){clearInterval(timers[k]);unlock(k);const s=document.getElementById('sol'+k);s.classList.remove('hidden');
+  document.getElementById('o'+k+'_'+mods[cur].ch[k].ans).classList.add('ok');
+  if(!s.dataset.r){s.dataset.r=1;renderMath(s)}}
+show(0);
+</script>
+</body>
+</html>
